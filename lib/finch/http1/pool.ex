@@ -75,6 +75,15 @@ defmodule Finch.HTTP1.Pool do
   @impl NimblePool
   def handle_checkout(:checkout, _, %{mint: nil} = conn, pool_state) do
     idle_time = System.monotonic_time() - conn.last_checkin
+
+    meta = %{
+      scheme: conn.scheme,
+      host: conn.host,
+      port: conn.port
+    }
+
+    Telemetry.event(:checkout, %{}, meta)
+
     {:ok, {:fresh, conn, idle_time}, conn, pool_state}
   end
 
@@ -83,6 +92,14 @@ defmodule Finch.HTTP1.Pool do
 
     with true <- Conn.reusable?(conn, idle_time),
          {:ok, conn} <- Conn.set_mode(conn, :passive) do
+      meta = %{
+        scheme: conn.scheme,
+        host: conn.host,
+        port: conn.port
+      }
+
+      Telemetry.event(:checkout, %{}, meta)
+
       {:ok, {:reuse, conn, idle_time}, conn, pool_state}
     else
       false ->
@@ -106,6 +123,14 @@ defmodule Finch.HTTP1.Pool do
   def handle_checkin(checkin, _from, _old_conn, pool_state) do
     with {:ok, conn} <- checkin,
          {:ok, conn} <- Conn.set_mode(conn, :active) do
+      meta = %{
+        scheme: conn.scheme,
+        host: conn.host,
+        port: conn.port
+      }
+
+      Telemetry.event(:checkin, %{}, meta)
+
       {:ok, %{conn | last_checkin: System.monotonic_time()}, pool_state}
     else
       _ ->
